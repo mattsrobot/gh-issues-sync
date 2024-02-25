@@ -1,98 +1,56 @@
-package internal_handlers
+package webhook_handlers
 
 import (
-	"context"
-	"database/sql"
-	"net/url"
-	"strings"
-
+	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jmoiron/sqlx"
-	"github.com/macwilko/issues-sync/db/models"
-	helpers "github.com/macwilko/issues-sync/internal_handlers/helpers"
-	"github.com/meilisearch/meilisearch-go"
+	"github.com/hibiken/asynq"
+	"github.com/macwilko/issues-sync/tasks"
 )
 
-func GithubIssues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.Client) error {
+func GithubIssues(c *fiber.Ctx, queue *asynq.Client) error {
 
-	escapedOwner := helpers.Truncate(strings.ToLower(c.Params("owner")), 255)
-	escapedName := helpers.Truncate(strings.ToLower(c.Params("name")), 255)
+	slog.Info("🏃 Starting a github webhook issues request")
 
-	owner, err := url.QueryUnescape(escapedOwner)
+	c.Accepts("application/json")
 
-	if err != nil {
-
-		slog.Warn("❌ Unable to unescape query parameter",
-			slog.String("escaped_owner", escapedOwner),
-			slog.String("error", err.Error()),
-		)
-
-		return c.Status(fiber.StatusNotFound).JSON(&fiber.Map{
-			"message": "not found",
-		})
-	}
-
-	name, err := url.QueryUnescape(escapedName)
+	task, err := tasks.NewGithubProcessIssueUpdate(
+		c.Body(),
+	)
 
 	if err != nil {
+		slog.Error("💀 Could not enqueue github issue",
+			slog.String("error", err.Error()))
 
-		slog.Warn("❌ Unable to unescape query parameter",
-			slog.String("escaped_name", escapedName),
-			slog.String("error", err.Error()),
-		)
-
-		return c.Status(fiber.StatusNotFound).JSON(&fiber.Map{
-			"message": "not found",
-		})
+		return c.
+			Status(fiber.StatusOK).
+			JSON(&fiber.Map{"message": "unexpected error"})
 	}
 
-	slog.Info("💡 Starting - fetch issues",
-		slog.String("owner", owner),
-		slog.String("name", name))
+	info, err := queue.Enqueue(task, asynq.Unique(time.Hour), asynq.Queue("critical"))
 
-	issues := []models.Issues{}
-
-	err = db.Select(&issues, "SELECT * FROM issues WHERE repo_name=$1 AND repo_owner=$2 LIMIT 25", name, owner)
-
-	if err != nil && err != sql.ErrNoRows {
-		slog.Error("💀 An internal error happened",
-			slog.String("owner", owner),
-			slog.String("name", name),
-			slog.String("error", err.Error()),
-		)
-
-		return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
-			"message": "an internal error happened",
-		})
-	}
-
-	issuesJson := []fiber.Map{}
-
-	for _, issue := range issues {
-		json, err := issue.ToMap()
-
-		if err != nil {
-			slog.Error("💀 An internal error happened",
-				slog.String("owner", owner),
-				slog.String("name", name),
-				slog.String("error", err.Error()),
-			)
-
-			return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
-				"message": "an internal error happened",
-			})
+	if err != nil {
+		switch {
+		case errors.Is(err, asynq.ErrDuplicateTask):
+			slog.Info("💀 Duplicate task process github issue",
+				slog.String("error", err.Error()))
+		default:
+			slog.Error("💀 Could not enqueue process github issue",
+				slog.String("error", err.Error()))
 		}
 
-		issuesJson = append(issuesJson, *json)
+		return c.
+			Status(fiber.StatusOK).
+			JSON(&fiber.Map{"message": "unexpected error"})
 	}
 
-	slog.Info("✅ Finished - fetch issues",
-		slog.String("owner", owner),
-		slog.String("name", name))
+	slog.Info("✅ Issue is scheduled for processing",
+		slog.String("task-id", info.ID),
+		slog.String("queue", info.Queue))
 
 	return c.
 		Status(fiber.StatusOK).
-		JSON(&issuesJson)
+		JSON(&fiber.Map{"message": "ok"})
 }

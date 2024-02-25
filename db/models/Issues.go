@@ -22,6 +22,7 @@ type Issues struct {
 	Author        types.JSONText `db:"author"`         // JSONB
 	Labels        types.JSONText `db:"labels"`         // JSONB
 	Assignees     types.JSONText `db:"assignees"`      // JSONB
+	Closed        bool           `db:"closed"`         // BOOLEAN idx
 }
 
 func (c Issues) ToMap() (*fiber.Map, error) {

@@ -110,10 +110,6 @@ func main() {
 		return tasks.HandleReindexSearchDatabase(ctx, t, db, meili)
 	})
 
-	mux.HandleFunc(tasks.GithubProcessIssueCreate, func(ctx context.Context, t *asynq.Task) error {
-		return tasks.HandleGithubProcessIssueCreate(ctx, t, db, meili, queue)
-	})
-
 	mux.HandleFunc(tasks.GithubProcessIssueUpdate, func(ctx context.Context, t *asynq.Task) error {
 		return tasks.HandleGithubProcessIssueUpdate(ctx, t, db, meili, queue)
 	})

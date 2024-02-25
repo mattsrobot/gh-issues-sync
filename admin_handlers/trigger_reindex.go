@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/utils"
 	"github.com/hibiken/asynq"
 	"github.com/jmoiron/sqlx"
 	"github.com/macwilko/issues-sync/internal_handlers/helpers"
@@ -18,8 +19,8 @@ func TriggerReindex(c *fiber.Ctx, queue *asynq.Client, db *sqlx.DB) error {
 
 	slog.Info("💡 Starting - trigger reindex")
 
-	escapedOwner := helpers.Truncate(strings.ToLower(c.Params("owner")), 255)
-	escapedName := helpers.Truncate(strings.ToLower(c.Params("name")), 255)
+	escapedOwner := helpers.Truncate(strings.ToLower(utils.CopyString(c.Params("owner"))), 255)
+	escapedName := helpers.Truncate(strings.ToLower(utils.CopyString(c.Params("name"))), 255)
 
 	owner, err := url.QueryUnescape(escapedOwner)
 

@@ -21,6 +21,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/macwilko/issues-sync/admin_handlers"
 	"github.com/macwilko/issues-sync/internal_handlers"
+	"github.com/macwilko/issues-sync/webhook_handlers"
 	"github.com/meilisearch/meilisearch-go"
 	"github.com/redis/go-redis/v9"
 	"github.com/valyala/fasthttp"
@@ -143,8 +144,8 @@ func main() {
 
 	v1.Mount("/webhooks", webhooks)
 
-	webhooks.Get("/github/:owner/:name", func(c *fiber.Ctx) error {
-		return internal_handlers.Issues(c, ctx, db, meili)
+	webhooks.Post("/github/issues", func(c *fiber.Ctx) error {
+		return webhook_handlers.GithubIssues(c, queue)
 	})
 
 	internal := fiber.New()
