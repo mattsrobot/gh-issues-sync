@@ -21,7 +21,7 @@ type BroadcastMessageInput struct {
 }
 
 func BroadcastMessage(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, queue *asynq.Client, server *chatserver.Server) error {
-	slog.Info("Broadcasting message ✅")
+	slog.Info("⚡️ Broadcasting message")
 
 	input := new(BroadcastMessageInput)
 
@@ -68,6 +68,8 @@ func BroadcastMessage(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, queue *asy
 		Message: input.Message,
 		Topic:   input.Topic,
 	}
+
+	slog.Info("Broadcasted message ✅")
 
 	return c.Status(fiber.StatusOK).JSON(&fiber.Map{
 		"ok": true,
