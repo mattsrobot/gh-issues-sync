@@ -58,6 +58,7 @@ func (c Issues) ToMap() (*fiber.Map, error) {
 		"author":         author,
 		"labels":         labels,
 		"assignees":      assignees,
+		"closed":         c.Closed,
 	}
 
 	if c.UpdatedAt.Valid {

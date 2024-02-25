@@ -6,11 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/hibiken/asynq"
+	"github.com/imroc/req/v3"
 	"github.com/jmoiron/sqlx"
 	"github.com/macwilko/issues-sync/db/models"
+	"github.com/macwilko/issues-sync/ws_handlers"
 	"github.com/meilisearch/meilisearch-go"
 )
 
@@ -277,6 +281,27 @@ func HandleGithubProcessIssueUpdate(ctx context.Context, t *asynq.Task, db *sqlx
 
 		return err
 	}
+
+	marshalled, err := json.Marshal(fiber.Map{
+		"updated_at": time.Now().Format(time.RFC3339),
+	})
+
+	if err != nil {
+		slog.Error("💀 Couldn't marshal message",
+			slog.String("error", err.Error()))
+
+		return nil
+	}
+
+	client := req.C()
+
+	client.R().
+		SetContentType("application/json").
+		SetBody(&ws_handlers.BroadcastMessageInput{
+			Topic:   fmt.Sprintf("repo-%s-%s", webhook.Repo.Owner, webhook.Repo.Name),
+			Message: string(marshalled),
+		}).
+		Post(os.Getenv("WS_API_PRIVATE_URL") + "/broadcast-message")
 
 	slog.Info("✅ Completed processing github issue",
 		slog.String("name", webhook.Repo.Name),

@@ -9,7 +9,6 @@ import (
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/utils"
 	"github.com/jmoiron/sqlx"
 	"github.com/macwilko/issues-sync/db/models"
 	helpers "github.com/macwilko/issues-sync/internal_handlers/helpers"
@@ -18,8 +17,8 @@ import (
 
 func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.Client) error {
 
-	escapedOwner := helpers.Truncate(strings.ToLower(utils.CopyString(c.Params("owner"))), 255)
-	escapedName := helpers.Truncate(strings.ToLower(utils.CopyString(c.Params("name"))), 255)
+	escapedOwner := helpers.Truncate(strings.ToLower(c.Params("owner")), 255)
+	escapedName := helpers.Truncate(strings.ToLower(c.Params("name")), 255)
 
 	owner, err := url.QueryUnescape(escapedOwner)
 
@@ -47,13 +46,15 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 		})
 	}
 
+	state := c.Query("state")
+
 	slog.Info("💡 Starting - fetch issues",
 		slog.String("owner", owner),
 		slog.String("name", name))
 
 	issues := []models.Issues{}
 
-	err = db.Select(&issues, "SELECT * FROM issues WHERE repo_name=$1 AND repo_owner=$2 LIMIT 25", name, owner)
+	err = db.Select(&issues, "SELECT * FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3 LIMIT 25", name, owner, state == "closed")
 
 	if err != nil && err != sql.ErrNoRows {
 		slog.Error("💀 An internal error happened",
@@ -87,11 +88,49 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 		issuesJson = append(issuesJson, *json)
 	}
 
+	var closedCount int
+
+	err = db.Get(&closedCount, "SELECT count(*) FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3", name, owner, 1)
+
+	if err != nil {
+		slog.Error("💀 An internal error happened, getting closed count",
+			slog.String("owner", owner),
+			slog.String("name", name),
+			slog.String("error", err.Error()),
+		)
+
+		return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
+			"message": "an internal error happened",
+		})
+	}
+
+	var openCount int
+
+	err = db.Get(&openCount, "SELECT count(*) FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3", name, owner, 0)
+
+	if err != nil {
+		slog.Error("💀 An internal error happened, getting open count",
+			slog.String("owner", owner),
+			slog.String("name", name),
+			slog.String("error", err.Error()),
+		)
+
+		return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
+			"message": "an internal error happened",
+		})
+	}
+
+	responseJson := fiber.Map{
+		"closed_count": closedCount,
+		"open_count":   openCount,
+		"issues":       issuesJson,
+	}
+
 	slog.Info("✅ Finished - fetch issues",
 		slog.String("owner", owner),
 		slog.String("name", name))
 
 	return c.
 		Status(fiber.StatusOK).
-		JSON(&issuesJson)
+		JSON(&responseJson)
 }
