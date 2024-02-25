@@ -54,7 +54,7 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 
 	issues := []models.Issues{}
 
-	err = db.Select(&issues, "SELECT * FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3 ORDER BY created_at ASC LIMIT 25", name, owner, state == "closed")
+	err = db.Select(&issues, "SELECT * FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3 ORDER BY created_at DESC LIMIT 25", name, owner, state == "closed")
 
 	if err != nil && err != sql.ErrNoRows {
 		slog.Error("💀 An internal error happened",
