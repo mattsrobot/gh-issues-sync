@@ -69,7 +69,8 @@ func BroadcastMessage(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, queue *asy
 		Topic:   input.Topic,
 	}
 
-	slog.Info("Broadcasted message ✅")
+	slog.Info("Broadcasted message ✅",
+		slog.String("topic", input.Topic))
 
 	return c.Status(fiber.StatusOK).JSON(&fiber.Map{
 		"ok": true,
