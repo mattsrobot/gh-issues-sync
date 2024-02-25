@@ -298,7 +298,7 @@ func HandleGithubProcessIssueUpdate(ctx context.Context, t *asynq.Task, db *sqlx
 	client.R().
 		SetContentType("application/json").
 		SetBody(&ws_handlers.BroadcastMessageInput{
-			Topic:   fmt.Sprintf("repo-%s-%s", webhook.Repo.Owner, webhook.Repo.Name),
+			Topic:   fmt.Sprintf("repo-%s-%s", webhook.Repo.Owner.Login, webhook.Repo.Name),
 			Message: string(marshalled),
 		}).
 		Post(os.Getenv("WS_API_PRIVATE_URL") + "/broadcast-message")
