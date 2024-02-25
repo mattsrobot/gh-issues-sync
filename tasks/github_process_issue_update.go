@@ -189,18 +189,18 @@ func HandleGithubProcessIssueUpdate(ctx context.Context, t *asynq.Task, db *sqlx
 
 	selectIssue := `
 	SELECT * FROM issues
-	WHERE repo_name=$1 AND repo_owner=$2 AND issue_number=$3
+	WHERE github_id=$1
 	LIMIT 1
 	`
 
-	err = tx.Get(&issue, selectIssue, webhook.Repo.Name, webhook.Repo.Owner.Login, webhook.Issue.Number)
+	err = tx.Get(&issue, selectIssue, webhook.Issue.ID)
 
 	if err == sql.ErrNoRows {
 		insertIntoIssues := `
 		INSERT INTO issues
-			(id, created_at, updated_at, title, issue_number, comments_count, repo_name, repo_owner, author, labels, assignees, closed)
+			(id, created_at, updated_at, title, issue_number, comments_count, repo_name, repo_owner, author, labels, assignees, closed, github_id)
 		VALUES
-			(nextval('issues_id_seq'::regclass), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			(nextval('issues_id_seq'::regclass), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		`
 
 		_, err = tx.Exec(
@@ -216,6 +216,7 @@ func HandleGithubProcessIssueUpdate(ctx context.Context, t *asynq.Task, db *sqlx
 			labels,
 			assignees,
 			webhook.Issue.State == "closed",
+			webhook.Issue.ID,
 		)
 
 		if err != nil {

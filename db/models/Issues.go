@@ -12,6 +12,7 @@ import (
 
 type Issues struct {
 	ID            uint64         `db:"id"`             // INT8 PKEY
+	GitHubID      uint64         `db:"github_id"`      // BIGINT
 	CreatedAt     time.Time      `db:"created_at"`     // TIMESTAMPZ
 	UpdatedAt     sql.NullTime   `db:"updated_at"`     // TIMESTAMPZ
 	Title         string         `db:"title"`          // VARCHAR(2000)
