@@ -140,18 +140,6 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 
 		closedCount = closedSearchResponse.TotalHits
 
-		if err != nil {
-			slog.Error("💀 An internal error happened",
-				slog.String("owner", owner),
-				slog.String("name", name),
-				slog.String("error", err.Error()),
-			)
-
-			return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
-				"message": "an internal error happened",
-			})
-		}
-
 		issuesJson = searchResponse.Hits
 
 	} else {
