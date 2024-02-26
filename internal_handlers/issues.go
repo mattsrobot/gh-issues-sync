@@ -119,7 +119,7 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 			})
 		}
 
-		openCount = openSearchResponse.TotalHits
+		openCount = openSearchResponse.EstimatedTotalHits
 
 		closedSearchResponse, err := meili.Index(meiliIndex).Search(q, &meilisearch.SearchRequest{
 			Limit:  25,
@@ -138,7 +138,7 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 			})
 		}
 
-		closedCount = closedSearchResponse.TotalHits
+		closedCount = closedSearchResponse.EstimatedTotalHits
 
 		issuesJson = searchResponse.Hits
 
