@@ -61,22 +61,17 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 	if len(q) > 0 {
 
 		meiliFilter := ""
-
+		meiliIndex := "issues-" + owner + "-" + name
 		openFilter := "closed = false AND "
 		closedFilter := "closed = true AND "
+		repoFilter := "repo_owner = '" + owner + "' AND repo_name = '" + name + "'"
 
 		switch state {
 		case "open":
-			meiliFilter = openFilter
+			meiliFilter = openFilter + repoFilter
 		case "closed":
-			meiliFilter = closedFilter
+			meiliFilter = closedFilter + repoFilter
 		}
-
-		repoFilter := "repo_owner = '" + owner + "' AND repo_name = '" + name + "'"
-
-		meiliFilter = meiliFilter + repoFilter
-
-		meiliIndex := "issues-" + owner + "-" + name
 
 		searchResponse, err := meili.Index(meiliIndex).Search(q, &meilisearch.SearchRequest{
 			Limit:                 25,
