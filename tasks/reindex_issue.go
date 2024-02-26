@@ -76,7 +76,7 @@ func HandleReindexIssue(ctx context.Context, t *asynq.Task, db *sqlx.DB, meili *
 
 	index := meili.Index("issues-" + issue.RepoOwner + "-" + issue.RepoName)
 
-	_, err = index.UpdateFilterableAttributes(&[]string{"title", "author.login", "closed"})
+	_, err = index.UpdateFilterableAttributes(&[]string{"repo_owner", "repo_name", "closed"})
 
 	if err != nil {
 		slog.Error("💀 Couldnt update filterable attributed",

@@ -103,7 +103,7 @@ func HandleReindexSearchDatabase(ctx context.Context, t *asynq.Task, db *sqlx.DB
 
 	index := meili.Index("issues-" + p.RepoOwner + "-" + p.RepoName)
 
-	_, err = index.UpdateFilterableAttributes(&[]string{"title", "author.login", "closed"})
+	_, err = index.UpdateFilterableAttributes(&[]string{"repo_owner", "repo_name", "closed"})
 
 	if err != nil {
 		slog.Error("💀 Couldnt update filterable attributed",
