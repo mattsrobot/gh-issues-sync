@@ -71,7 +71,7 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 
 		searchResponse, err := meili.Index("issues-"+owner+"-"+name).Search(q, &meilisearch.SearchRequest{
 			Limit:                 100,
-			AttributesToHighlight: []string{"title", "author.login"},
+			AttributesToHighlight: []string{"title"},
 			Filter:                meiliFilter,
 		})
 
