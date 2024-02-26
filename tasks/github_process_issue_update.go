@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -201,23 +202,29 @@ func HandleGithubProcessIssueUpdate(ctx context.Context, t *asynq.Task, db *sqlx
 			(id, created_at, updated_at, title, issue_number, comments_count, repo_name, repo_owner, author, labels, assignees, closed, github_id)
 		VALUES
 			(nextval('issues_id_seq'::regclass), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		RETURNING
+			id
 		`
 
-		_, err = tx.Exec(
-			insertIntoIssues,
-			createdAt,
-			updatedAt,
-			webhook.Issue.Title,
-			webhook.Issue.Number,
-			webhook.Issue.Comments,
-			webhook.Repo.Name,
-			webhook.Repo.Owner.Login,
-			author,
-			labels,
-			assignees,
-			webhook.Issue.State == "closed",
-			webhook.Issue.ID,
-		)
+		var issueId uint64
+
+		err = tx.
+			QueryRowx(
+				insertIntoIssues,
+				createdAt,
+				updatedAt,
+				webhook.Issue.Title,
+				webhook.Issue.Number,
+				webhook.Issue.Comments,
+				webhook.Repo.Name,
+				webhook.Repo.Owner.Login,
+				author,
+				labels,
+				assignees,
+				webhook.Issue.State == "closed",
+				webhook.Issue.ID,
+			).
+			Scan(&issueId)
 
 		if err != nil {
 			tx.Rollback()
@@ -229,6 +236,8 @@ func HandleGithubProcessIssueUpdate(ctx context.Context, t *asynq.Task, db *sqlx
 
 			return err
 		}
+
+		issue.ID = issueId
 	} else if err != nil {
 		tx.Rollback()
 
@@ -292,6 +301,28 @@ func HandleGithubProcessIssueUpdate(ctx context.Context, t *asynq.Task, db *sqlx
 			slog.String("error", err.Error()))
 
 		return nil
+	}
+
+	task, err := NewReindexIssue(issue.ID)
+
+	if err != nil {
+		slog.Warn("💀 Could not enqueue search thread",
+			slog.String("error", err.Error()))
+
+		return nil
+	}
+
+	_, err = queue.Enqueue(task, asynq.Unique(time.Hour), asynq.Queue("low"))
+
+	if err != nil {
+		switch {
+		case errors.Is(err, asynq.ErrDuplicateTask):
+			slog.Warn("💀 Duplicate task search reindex",
+				slog.String("error", err.Error()))
+		default:
+			slog.Warn("💀 Could not enqueue search reindex",
+				slog.String("error", err.Error()))
+		}
 	}
 
 	client := req.C()

@@ -17,6 +17,7 @@ import (
 
 func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.Client) error {
 
+	q := helpers.Truncate(c.Query("q"), 100)
 	escapedOwner := helpers.Truncate(strings.ToLower(c.Params("owner")), 255)
 	escapedName := helpers.Truncate(strings.ToLower(c.Params("name")), 255)
 
@@ -53,25 +54,26 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 		slog.String("name", name))
 
 	issues := []models.Issues{}
+	var issuesJson []interface{}
 
-	err = db.Select(&issues, "SELECT * FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3 ORDER BY created_at DESC LIMIT 25", name, owner, state == "closed")
+	if len(q) >= 1 {
 
-	if err != nil && err != sql.ErrNoRows {
-		slog.Error("💀 An internal error happened",
-			slog.String("owner", owner),
-			slog.String("name", name),
-			slog.String("error", err.Error()),
-		)
+		meiliFilter := ""
 
-		return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
-			"message": "an internal error happened",
+		switch state {
+		case "open":
+			meiliFilter = "closed = false AND "
+		case "closed":
+			meiliFilter = "closed = true AND "
+		}
+
+		meiliFilter = meiliFilter + "repo_owner = '" + owner + "' AND repo_name = '" + name + "'"
+
+		searchResponse, err := meili.Index("issues-"+owner+"-"+name).Search(q, &meilisearch.SearchRequest{
+			Limit:                 100,
+			AttributesToHighlight: []string{"title", "author.login"},
+			Filter:                meiliFilter,
 		})
-	}
-
-	issuesJson := []fiber.Map{}
-
-	for _, issue := range issues {
-		json, err := issue.ToMap()
 
 		if err != nil {
 			slog.Error("💀 An internal error happened",
@@ -85,7 +87,46 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 			})
 		}
 
-		issuesJson = append(issuesJson, *json)
+		slog.Info("💡 Search results info",
+			slog.String("query", q),
+			slog.String("filter", meiliFilter),
+			slog.Int64("estimated_hits", searchResponse.EstimatedTotalHits),
+			slog.Int64("hits", searchResponse.TotalHits))
+
+		issuesJson = searchResponse.Hits
+
+	} else {
+		err = db.Select(&issues, "SELECT * FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3 ORDER BY created_at DESC LIMIT 25", name, owner, state == "closed")
+
+		if err != nil && err != sql.ErrNoRows {
+			slog.Error("💀 An internal error happened",
+				slog.String("owner", owner),
+				slog.String("name", name),
+				slog.String("error", err.Error()),
+			)
+
+			return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
+				"message": "an internal error happened",
+			})
+		}
+
+		for _, issue := range issues {
+			json, err := issue.ToMap()
+
+			if err != nil {
+				slog.Error("💀 An internal error happened",
+					slog.String("owner", owner),
+					slog.String("name", name),
+					slog.String("error", err.Error()),
+				)
+
+				return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
+					"message": "an internal error happened",
+				})
+			}
+
+			issuesJson = append(issuesJson, *json)
+		}
 	}
 
 	var closedCount int

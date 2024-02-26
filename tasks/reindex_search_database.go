@@ -3,6 +3,7 @@ package tasks
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 
 	"github.com/hibiken/asynq"
@@ -39,6 +40,80 @@ func NewReindexSearchDatabase(RepoOwner string, RepoName string) (*asynq.Task, e
 
 func HandleReindexSearchDatabase(ctx context.Context, t *asynq.Task, db *sqlx.DB, meili *meilisearch.Client) error {
 	slog.Info("Starting reindexing search database ✅")
+
+	var p ReindexSearchDatabasePayload
+
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		slog.Error("Could not reindex search database",
+			slog.String("error", err.Error()))
+
+		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
+	}
+
+	deleteIndex, err := meili.DeleteIndex("issues-" + p.RepoOwner + "-" + p.RepoName)
+
+	if err != nil {
+		slog.Error("💀 Couldn't trigger meilisearch index, error deleting index",
+			slog.String("repo_owner", p.RepoOwner),
+			slog.String("repo_name", p.RepoName),
+			slog.String("error", err.Error()),
+		)
+
+		return err
+	}
+
+	_, err = meili.WaitForTask(deleteIndex.TaskUID)
+
+	if err != nil {
+		slog.Error("💀 Couldn't trigger meilisearch index, error deleting index",
+			slog.String("repo_owner", p.RepoOwner),
+			slog.String("repo_name", p.RepoName),
+			slog.String("error", err.Error()),
+		)
+
+		return err
+	}
+
+	createIndex, err := meili.CreateIndex(&meilisearch.IndexConfig{
+		Uid:        "issues-" + p.RepoOwner + "-" + p.RepoName,
+		PrimaryKey: "id",
+	})
+
+	if err != nil {
+		slog.Error("💀 Couldn't trigger meilisearch index, error creating index",
+			slog.String("repo_owner", p.RepoOwner),
+			slog.String("repo_name", p.RepoName),
+			slog.String("error", err.Error()),
+		)
+
+		return err
+	}
+
+	_, err = meili.WaitForTask(createIndex.TaskUID)
+
+	if err != nil {
+		slog.Error("💀 Couldn't trigger meilisearch index, error creating index",
+			slog.String("repo_owner", p.RepoOwner),
+			slog.String("repo_name", p.RepoName),
+			slog.String("error", err.Error()),
+		)
+
+		return err
+	}
+
+	index := meili.Index("issues-" + p.RepoOwner + "-" + p.RepoName)
+
+	_, err = index.UpdateFilterableAttributes(&[]string{"title", "author.login"})
+
+	if err != nil {
+		slog.Error("💀 Couldnt update filterable attributed",
+			slog.String("repo_owner", p.RepoOwner),
+			slog.String("repo_name", p.RepoName),
+			slog.String("error", err.Error()),
+		)
+
+		return err
+	}
 
 	slog.Info("Completed reindexing search database 🚀")
 
