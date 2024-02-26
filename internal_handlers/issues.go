@@ -56,7 +56,7 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 	issues := []models.Issues{}
 	var issuesJson []interface{}
 
-	if len(q) >= 1 {
+	if len(q) > 0 {
 
 		meiliFilter := ""
 
@@ -70,7 +70,7 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 		meiliFilter = meiliFilter + "repo_owner = '" + owner + "' AND repo_name = '" + name + "'"
 
 		searchResponse, err := meili.Index("issues-"+owner+"-"+name).Search(q, &meilisearch.SearchRequest{
-			Limit:                 100,
+			Limit:                 25,
 			AttributesToHighlight: []string{"*"},
 			Filter:                meiliFilter,
 		})
