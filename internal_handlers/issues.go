@@ -55,8 +55,8 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 
 	issues := []models.Issues{}
 	var issuesJson []interface{}
-	var closedCount int
-	var openCount int
+	var closedCount int64
+	var openCount int64
 
 	if len(q) > 0 {
 
@@ -119,7 +119,7 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 			})
 		}
 
-		openCount = int(openSearchResponse.TotalHits)
+		openCount = openSearchResponse.TotalHits
 
 		closedSearchResponse, err := meili.Index(meiliIndex).Search(q, &meilisearch.SearchRequest{
 			Limit:  25,
@@ -138,7 +138,7 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 			})
 		}
 
-		closedCount = int(closedSearchResponse.TotalHits)
+		closedCount = closedSearchResponse.TotalHits
 
 		if err != nil {
 			slog.Error("💀 An internal error happened",
@@ -187,8 +187,6 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 			issuesJson = append(issuesJson, *json)
 		}
 
-		var closedCount int
-
 		err = db.Get(&closedCount, "SELECT count(*) FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3", name, owner, 1)
 
 		if err != nil {
@@ -202,8 +200,6 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 				"message": "an internal error happened",
 			})
 		}
-
-		var openCount int
 
 		err = db.Get(&openCount, "SELECT count(*) FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3", name, owner, 0)
 
