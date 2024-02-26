@@ -55,21 +55,30 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 
 	issues := []models.Issues{}
 	var issuesJson []interface{}
+	var closedCount int
+	var openCount int
 
 	if len(q) > 0 {
 
 		meiliFilter := ""
 
+		openFilter := "closed = false AND "
+		closedFilter := "closed = true AND "
+
 		switch state {
 		case "open":
-			meiliFilter = "closed = false AND "
+			meiliFilter = openFilter
 		case "closed":
-			meiliFilter = "closed = true AND "
+			meiliFilter = closedFilter
 		}
 
-		meiliFilter = meiliFilter + "repo_owner = '" + owner + "' AND repo_name = '" + name + "'"
+		repoFilter := "repo_owner = '" + owner + "' AND repo_name = '" + name + "'"
 
-		searchResponse, err := meili.Index("issues-"+owner+"-"+name).Search(q, &meilisearch.SearchRequest{
+		meiliFilter = meiliFilter + repoFilter
+
+		meiliIndex := "issues-" + owner + "-" + name
+
+		searchResponse, err := meili.Index(meiliIndex).Search(q, &meilisearch.SearchRequest{
 			Limit:                 25,
 			AttributesToHighlight: []string{"*"},
 			Filter:                meiliFilter,
@@ -92,6 +101,56 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 			slog.String("filter", meiliFilter),
 			slog.Int64("estimated_hits", searchResponse.EstimatedTotalHits),
 			slog.Int64("hits", searchResponse.TotalHits))
+
+		openSearchResponse, err := meili.Index(meiliIndex).Search(q, &meilisearch.SearchRequest{
+			Limit:  25,
+			Filter: openFilter + repoFilter,
+		})
+
+		if err != nil {
+			slog.Error("💀 An internal error happened",
+				slog.String("owner", owner),
+				slog.String("name", name),
+				slog.String("error", err.Error()),
+			)
+
+			return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
+				"message": "an internal error happened",
+			})
+		}
+
+		openCount = int(openSearchResponse.TotalHits)
+
+		closedSearchResponse, err := meili.Index(meiliIndex).Search(q, &meilisearch.SearchRequest{
+			Limit:  25,
+			Filter: closedFilter + repoFilter,
+		})
+
+		if err != nil {
+			slog.Error("💀 An internal error happened",
+				slog.String("owner", owner),
+				slog.String("name", name),
+				slog.String("error", err.Error()),
+			)
+
+			return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
+				"message": "an internal error happened",
+			})
+		}
+
+		closedCount = int(closedSearchResponse.TotalHits)
+
+		if err != nil {
+			slog.Error("💀 An internal error happened",
+				slog.String("owner", owner),
+				slog.String("name", name),
+				slog.String("error", err.Error()),
+			)
+
+			return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
+				"message": "an internal error happened",
+			})
+		}
 
 		issuesJson = searchResponse.Hits
 
@@ -127,38 +186,38 @@ func Issues(c *fiber.Ctx, ctx context.Context, db *sqlx.DB, meili *meilisearch.C
 
 			issuesJson = append(issuesJson, *json)
 		}
-	}
 
-	var closedCount int
+		var closedCount int
 
-	err = db.Get(&closedCount, "SELECT count(*) FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3", name, owner, 1)
+		err = db.Get(&closedCount, "SELECT count(*) FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3", name, owner, 1)
 
-	if err != nil {
-		slog.Error("💀 An internal error happened, getting closed count",
-			slog.String("owner", owner),
-			slog.String("name", name),
-			slog.String("error", err.Error()),
-		)
+		if err != nil {
+			slog.Error("💀 An internal error happened, getting closed count",
+				slog.String("owner", owner),
+				slog.String("name", name),
+				slog.String("error", err.Error()),
+			)
 
-		return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
-			"message": "an internal error happened",
-		})
-	}
+			return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
+				"message": "an internal error happened",
+			})
+		}
 
-	var openCount int
+		var openCount int
 
-	err = db.Get(&openCount, "SELECT count(*) FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3", name, owner, 0)
+		err = db.Get(&openCount, "SELECT count(*) FROM issues WHERE repo_name=$1 AND repo_owner=$2 AND closed=$3", name, owner, 0)
 
-	if err != nil {
-		slog.Error("💀 An internal error happened, getting open count",
-			slog.String("owner", owner),
-			slog.String("name", name),
-			slog.String("error", err.Error()),
-		)
+		if err != nil {
+			slog.Error("💀 An internal error happened, getting open count",
+				slog.String("owner", owner),
+				slog.String("name", name),
+				slog.String("error", err.Error()),
+			)
 
-		return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
-			"message": "an internal error happened",
-		})
+			return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
+				"message": "an internal error happened",
+			})
+		}
 	}
 
 	responseJson := fiber.Map{
